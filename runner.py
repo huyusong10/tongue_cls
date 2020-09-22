@@ -185,7 +185,7 @@ class Runner():
         return np.mean(loss_ls)
 
     # calculate metric(s)
-    def _metric(precision, recall):
+    def _metric(self, precision, recall):
         metric = precision * 0.5 + recall * 0.5
         return metric
 

@@ -1,14 +1,14 @@
 project_name: 'tongue_cls'
 
-device: '0'  # GPU selection
+device: '1,2,3'  # GPU selection
 num_workers: 16  # Workers used for dataloader
-model_level: 0  # There are multiple levels of efficientnet, details in https://github.com/lukemelas/EfficientNet-PyTorch 
-weights: 'adv-efficientnet-b0-b64d5a18.pth'  # Pretrained weights, please download from the repo above
+model_level: 2  # There are multiple levels of efficientnet, details in https://github.com/lukemelas/EfficientNet-PyTorch 
+weights: 'adv-efficientnet-b2.pth'  # Pretrained weights, please download from the repo above
 num_classes: 24  # labels outnumbered num_classes-1 will be deprecated
-img_size: 512  # [b0, b1, b2, b3, b4, b5, b6, b7, b8] -> [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
+img_size: 768  # [b0, b1, b2, b3, b4, b5, b6, b7, b8] -> [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
 epoch: 100
-batch_size: 32  # Must be multiples of the gpus
+batch_size: 18  # Must be multiples of the gpus
 
 # learning rate related params
 lr: 0.01
