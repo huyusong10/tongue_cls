@@ -32,17 +32,24 @@ class Params:
 
 # Initialize efficientnet
 def get_model(params):
-    params.weights = check_file(params.weights)
-    model= EfficientNet.from_pretrained('efficientnet-b{}'.format(params.model_level), weights_path=params.weights, num_classes=params.num_classes, image_size=params.img_size)
-    return model
+    if not params.resume:
+        params.weights = check_file(params.weights)
+        ckpt = None
+        model = EfficientNet.from_pretrained('efficientnet-b{}'.format(params.model_level), weights_path=params.weights, num_classes=params.num_classes, image_size=params.img_size)
+    else:
+        params.resume = check_file(params.resume)
+        ckpt = torch.load(params.resume)
+        model = EfficientNet.from_name('efficientnet-b{}'.format(params.model_level), num_classes=params.num_classes, image_size=params.img_size)
+        model.load_state_dict(ckpt['network'], strict=False)
+    return model, ckpt
 
 # 'auto' is recommanded
 # Details in https://arxiv.org/pdf/1812.01187.pdf
-def get_scheduler(optim, sche_type, step_size, t_max, epochs):
+def get_scheduler(optim, sche_type, step_size, epochs):
     if sche_type == "exp":
         return StepLR(optim, step_size, 0.97)
-    elif sche_type == "cosine":
-        return CosineAnnealingLR(optim, t_max)
+    # elif sche_type == "cosine":
+    #     return CosineAnnealingLR(optim, t_max)
     elif sche_type == "auto":
         return LambdaLR(optim, lambda x: (((1 + np.cos(x * np.pi / epochs)) / 2) ** 1.0) * 0.9 + 0.1)
     else:
@@ -62,7 +69,7 @@ if __name__ == "__main__":
 
     train_loader, val_loader = get_loaders(params.input_dir, params.num_classes, params.img_size, params.batch_size, params.num_workers)
 
-    net = get_model(params)
+    net, ckpt = get_model(params)
     net = nn.DataParallel(net).to(device)
 
     ''' This CrossEntropyLoss implementation comes with a softmax activation function,
@@ -80,7 +87,7 @@ if __name__ == "__main__":
         "SGD": lambda : torch.optim.SGD(net.parameters(), lr=params.lr, momentum=params.momentum, nesterov=True, weight_decay=params.weight_decay)
     }[params.optim]()
 
-    scheduler = get_scheduler(optim, params.scheduler, int(2.4 * len(train_loader)), params.epoch * len(train_loader), params.epoch)
+    scheduler = get_scheduler(optim, params.scheduler, int(2.4 * len(train_loader)), params.epoch)
 
     ''' use tensorboard like 'tensorboard --logdir=. --port=8091', get your chart from browser at 'localhost:8091'
     '''
@@ -89,7 +96,7 @@ if __name__ == "__main__":
     with open(os.path.join(params.save_dir, 'params.yml'), 'w') as f:  # save parameters
         yaml.dump(params.get_dict(), f, sort_keys=False)
 
-    model = Runner(params, net, optim, device, loss, writer, scheduler)  # build Runner instance
+    model = Runner(params, net, optim, device, loss, writer, scheduler, ckpt)  # build Runner instance
 
     model.train(train_loader, val_loader)  
     writer.close()

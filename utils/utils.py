@@ -12,7 +12,7 @@ def check_file(file):
     if os.path.isfile(file):
         return file
     else:
-        files = glob.glob('./**/' + file, recursive=True)
+        files = glob.glob(os.path.join('**', file), recursive=True)
         assert len(files), 'No params file!'
         return files[0] 
 

@@ -25,7 +25,7 @@ class Runner():
         writer (SummaryWriter): log the details
         scheduler (torch.optim.lr_scheduler): scheduler to alter lr
     '''
-    def __init__(self, params, net, optim, torch_device, loss, writer, scheduler):
+    def __init__(self, params, net, optim, torch_device, loss, writer, scheduler, ckpt=None):
         self.params = params
         self.save_dir = params.save_dir
         self.result = os.path.join(self.save_dir, 'results.txt')  # training result will be log in this file
@@ -49,7 +49,8 @@ class Runner():
         self.best_valid_loss = np.inf
         self.conf_thresh = params.conf_thresh
 
-        # self.load()
+        if ckpt:
+            self.load(ckpt)
 
     def save(self, epoch, filename="train"):
 
@@ -59,40 +60,18 @@ class Runner():
                     "ema": self.ema.state_dict(),  # after training, either 'network' or 'ema' could be use
                     "optimizer": self.optim.state_dict(),
                     "best_metric": self.best_metric,
-                    "best_valid_metric": self.best_valid_loss
+                    "best_valid_loss": self.best_valid_loss
                     }, self.save_dir + "/%s.pth" % (filename))
         print("Model saved %d epoch" % (epoch))
 
     # this function is unfinished
-    def load(self, filename=""):
-        #  Model load. same with save
-        if filename == "":
-            # load last epoch model
-            filenames = sorted(glob(self.save_dir + "/*.pth"))
-            if len(filenames) == 0:
-                print("Not Load")
-                return
-            else:
-                filename = os.path.basename(filenames[-1])
-
-        file_path = self.save_dir + "/" + filename
-        if os.path.exists(file_path) is True:
-            print("Load %s to %s File" % (self.save_dir, filename))
-            ckpoint = torch.load(file_path)
-            if ckpoint["model_level"] != self.params.model_level:
-                raise ValueError("Ckpoint Model Type is %s" %
-                                 (ckpoint["model_level"]))
-
-            self.net.module.load_state_dict(ckpoint['network'])
-            self.ema.load_state_dict(ckpoint['ema'])
-            self.optim.load_state_dict(ckpoint['optimizer'])
-            self.start_epoch = ckpoint['start_epoch']
-            # self.best_metric = ckpoint["best_metric"]
-            self.best_valid_loss = ckpoint["best_valid_loss"]
-            print("Load Model Type : %s, epoch : %d valid loss : %f" %
-                  (ckpoint["model_type"], self.start_epoch, self.best_valid_loss))
-        else:
-            print("Load Failed, not exists file")
+    def load(self, ckpt):
+        self.ema.load_state_dict(ckpt['ema'])
+        self.optim.load_state_dict(ckpt['optimizer'])
+        self.start_epoch = ckpt['start_epoch']
+        self.best_metric = ckpt["best_metric"]
+        # self.best_valid_loss = ckpt["best_valid_loss"]
+        print("Model Loaded. Resuming training from epoch {}".format(self.start_epoch))
 
     # function to update ema model after every epoch
     def update_ema(self):
@@ -205,7 +184,7 @@ class Runner():
 
         if metric > self.best_metric:  # save the model if metric is better than before
             self.best_metric = metric
-            self.save(epoch, "model_epoch[%d]_metric[%.4f]" % (
+            self.save(epoch, "ckpt_%d_%.4f" % (
                 epoch, metric))
                 
         return loss, precision, recall, metric
