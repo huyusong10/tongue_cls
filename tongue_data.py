@@ -16,7 +16,10 @@ from torch.utils.data import DataLoader
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-random.seed(18)
+from sklearn.model_selection import KFold
+
+seed = 18
+random.seed(seed)
 
 # Light augmentation
 def light(img_size):
@@ -119,13 +122,18 @@ class TongueDataset(Dataset):
     def __len__(self) -> int:
         return len(self.img_ids)
 
-def get_loaders(input_dir, num_classes, img_size, batch_size, num_workers):
-    img_ids = [basename(x).split('.')[0] for x in glob(join(input_dir, 'images', '*.jpg'))]  # load image filename to a list
-    random.shuffle(img_ids)  # shuffle the list
-    img_counts = len(img_ids)
 
-    train_ids = img_ids[:-int(img_counts*0.2)]  # 80% of all used to train, the other val
-    val_ids = img_ids[-int(img_counts*0.2):]
+def get_loaders(input_dir, num_classes, img_size, batch_size, num_workers, fold=0):
+    img_ids = [basename(x).split('.')[0] for x in glob(join(input_dir, 'images', '*.jpg'))]  # load image filename to a list
+    
+    # random.shuffle(img_ids)  # shuffle the list
+    # img_counts = len(img_ids)
+    # train_ids = img_ids[:-int(img_counts*0.2)]  # 80% of all used to train, the other val
+    # val_ids = img_ids[-int(img_counts*0.2):]
+
+    kf = KFold(n_splits=5, random_state=seed, shuffle=True)
+    folds = [[train.tolost(), val.tolist()] for train, val in kf.split(img_ids)]
+    train_ids, val_ids = folds[fold]
 
     train_set = TongueDataset(
         input_dir, 

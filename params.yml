@@ -1,6 +1,7 @@
 project_name: 'tongue_cls'
 
-device: '0, 1,2,3'  # GPU selection
+device: '0, 1'  # GPU selection
+multilabels: True
 num_workers: 16  # Workers used for dataloader
 model_level: 0  # There are multiple levels of efficientnet, details in https://github.com/lukemelas/EfficientNet-PyTorch 
 weights: 'adv-efficientnet-b0.pth'  # Pretrained weights, please download from the repo above
@@ -9,11 +10,11 @@ num_classes: 24  # labels outnumbered num_classes-1 will be deprecated
 img_size: 604  # [b0, b1, b2, b3, b4, b5, b6, b7, b8] -> [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 
 epoch: 100
-batch_size: 32  # Must be multiples of the gpus
+batch_size: 64  # Must be multiples of the gpus
 
 # learning rate related params
-lr: 0.001
-optim: 'rmsprop'  # 'adamw', 'rmsprop', 'SGD'
+lr: 0.01
+optim: 'SGD'  # 'adamw', 'rmsprop', 'SGD'
 scheduler: 'auto'  # 'exp', 'cosine', 'auto'
 momentum: 0.937
 
@@ -29,5 +30,5 @@ beta: (0.9, 0.999)  # betas when use adamw
 eps: 0.001  # betas when use rmsprop
 
 # Directory related params
-input_dir: '/home/huys/tongue/'  # should be absolute path
+input_dir: '/data/hys/data/tongue/'  # should be absolute path
 save_dir: 'outs/'  # should be relative path

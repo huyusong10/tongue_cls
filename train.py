@@ -70,14 +70,14 @@ if __name__ == "__main__":
     train_loader, val_loader = get_loaders(params.input_dir, params.num_classes, params.img_size, params.batch_size, params.num_workers)
 
     net, ckpt = get_model(params)
-    net = nn.DataParallel(net).to(device)
+    net = nn.DataParallel(net).to(device, non_blocking=True)
 
     ''' This CrossEntropyLoss implementation comes with a softmax activation function,
         which is not suitable for this multi-label classification situation
     '''
     # loss = nn.CrossEntropyLoss()
 
-    loss = nn.BCEWithLogitsLoss()
+    loss = nn.BCEWithLogitsLoss() if params.multilabels else nn.CrossEntropyLoss()
 
     ''' Adam optimizer has fastest training speed, but with Familiarity to data, SGD is recommanded
     '''

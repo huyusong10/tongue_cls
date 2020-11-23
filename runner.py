@@ -84,18 +84,19 @@ class Runner():
     def train(self, train_loader, val_loader=None):
         ni = len(train_loader)
         step = 0
-        self.net.train()
+        # self.net.train()
         for epoch in range(self.start_epoch, self.params.epoch):
+            self.net.train()
             loss_ls = []  # loss list of one epoch
             pbar = tqdm(enumerate(train_loader), total=ni)
             for i, (input_, target_) in pbar:
                 target_ = target_.to(self.torch_device, non_blocking=True)
 
+                self.optim.zero_grad()
                 out = self.net(input_)
                 loss = self.loss(out, target_)
                 loss_ls.append(loss.item())
 
-                self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
                 self.update_ema()
@@ -108,6 +109,7 @@ class Runner():
                                 ni-1, loss.item()))
                 step += 1
 
+            self.scheduler.step()
             if val_loader is not None:  # validation after every epoch
                 loss, precision, recall, metric = self.valid(epoch, val_loader, step)
                 print('valid loss: {}, precision: {}, recall: {}, metric: {}'.format(loss, precision, recall, metric))
@@ -120,37 +122,82 @@ class Runner():
                 f.write('Epoch: {}/{}  Train loss: {:.5f}  Val loss: {: .5f}  Presicion: {: .5f}  Recall: {: .5f}  Metric: {: .5f}'
                         .format(epoch, self.params.epoch-1, np.mean(loss_ls), loss, precision, recall, metric) + '\n')
 
-            self.scheduler.step()
 
     # calculate mean loss, precision and recall
-    def _get_acc(self, loader):
+    def _get_acc(self, loader, singlecls=False):
+        
         loss_ls = []
-        tp = 0  # true positive
-        fp = 0  # false positive
-        tn = 0  # true negative
-        fn = 0  # false negative
+        preds = []
+        targets = []
+
+        tp_ = 0  # true positive
+        fp_ = 0  # false positive
+        tn_ = 0  # true negative
+        fn_ = 0  # false negative
+
         with torch.no_grad():
+            
             for input_, target_ in loader:
                 target_ = target_.to(self.torch_device, non_blocking=True)
                 outs = self.net(input_)
                 loss_ls.append(self.loss(outs, target_).item())
-                outs = torch.sigmoid(outs).cpu().numpy()
-                
+
+                if self.params.multilabels:
+                    outs = torch.sigmoid(outs).cpu().numpy()
+                else:
+                    outs = F.softmax(outs).cpu().numpy()
+
                 for i, out in enumerate(outs):
                     pred = [1 if x else 0 for x in out > self.conf_thresh]
+
+                    if singlecls:
+                        preds.append(pred)
+                        targets.append(target_[i].cpu().numpy())
+
                     for x in range(len(pred)):
                         if pred[x] == 1 and target_[i, x] == 1:
-                            tp += 1
+                            tp_ += 1
                         elif pred[x] == 1 and target_[i, x] == 0:
-                            fp += 1
+                            fp_ += 1
                         elif pred[x] == 0 and target_[i, x] == 0:
-                            tn += 1
+                            tn_ += 1
                         elif pred[x] == 0 and target_[i, x] == 1:
-                            fn += 1
+                            fn_ += 1
                         else:
-                            raise ValueError('pred is not binary!')
+                            raise ValueError('preds is not binary!')
 
-        return np.mean(loss_ls), tp/(tp+fp), tp/(tp+fn)  # mean loss, precision, recall
+        if singlecls:
+            result_sc = []
+            preds = np.array(preds)
+            targets = np.array(targets)
+            assert preds.shape == targets.shape
+
+            for j in range(preds.shape[1]):
+                tp, fp, tn, fn = 0, 0, 0, 0
+
+                for i in range(preds.shape[0]):
+                    if preds[i, j] == 1 and targets[i, j] == 1:
+                        tp += 1
+                    elif preds[i, j] == 1 and targets[i, j] == 0:
+                        fp += 1
+                    elif preds[i, j] == 0 and targets[i, j] == 0:
+                        tn += 1
+                    elif preds[i, j] == 0 and targets[i, j] == 1:
+                        fn += 1
+                    else:
+                        raise ValueError('preds is not binary!')
+                
+                p = tp/(tp+fp) if tp+fp!=0 else 0
+                r = tp/(tp+fn) if tp+fn!=0 else 0
+                f1 = 2*p*r / (p+r) if p+r!=0 else 0
+                result_sc.append([p, r, f1])
+                    
+                    
+            for i, (p, r, f1) in enumerate(result_sc):
+                print('{}st class: precision {:.3f} recall {:.3f} f1 {:.3f}'.format(i, p, r, f1))
+
+        return np.mean(loss_ls), tp_/(tp_+fp_), tp_/(tp_+fn_)  # mean loss, precision, recall
+
 
     # only calculate mean loss
     def _get_loss(self, loader):
@@ -165,15 +212,15 @@ class Runner():
 
     # calculate metric(s)
     def _metric(self, precision, recall):
-        metric = precision * 0.5 + recall * 0.5
+        metric = 2 * (precision * recall) / (precision + recall)    # F1 value
         return metric
 
     # validation function
     def valid(self, epoch, val_loader, step):
+        
         print('validating...')
         self.net.eval()
-        # loss = self._get_loss(val_loader)
-        loss, precision, recall = self._get_acc(val_loader)
+        loss, precision, recall = self._get_acc(val_loader, singlecls=True)
 
         metric = self._metric(precision, recall)
 
